@@ -72,8 +72,12 @@ class SophosFirewallSensor(CoordinatorEntity, SensorEntity):
         if report is None:
             return {}
         rows = [{"name": row.name, "hits": row.hits, "bytes": row.bytes} for row in report.rows[:10]]
-        return {
+        attributes: dict[str, Any] = {
             "total_hits": report.total_hits,
             "total_bytes": report.total_bytes,
             "top": rows,
         }
+        last_error = getattr(self.coordinator, "last_errors", {}).get(self.entity_description.report_key)
+        if last_error:
+            attributes["last_error"] = last_error
+        return attributes

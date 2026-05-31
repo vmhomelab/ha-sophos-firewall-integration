@@ -8,6 +8,8 @@ This repository is intentionally created with a `dev` branch for active work. Th
 
 The exact SFOS report payloads may need adjustment against a real firewall XML API response. The client already uses the correct SFOS API request shape: XML inside the `reqxml` form field.
 
+Report fetches are bounded to stay below Home Assistant's slow-update warning threshold. Failed report requests are logged per report and exposed as `last_error` on the affected sensor instead of blocking the entire coordinator update.
+
 ## Planned sensors
 
 - Blocked traffic

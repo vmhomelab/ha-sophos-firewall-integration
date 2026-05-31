@@ -2,7 +2,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from .const import CONF_REQUEST_TIMEOUT, CONF_UPDATE_INTERVAL, CONF_VERIFY_SSL, DOMAIN, PLATFORMS
+from .const import (
+    CONF_REQUEST_TIMEOUT,
+    CONF_UPDATE_INTERVAL,
+    CONF_VERIFY_SSL,
+    DEFAULT_REQUEST_TIMEOUT,
+    DOMAIN,
+    MAX_REQUEST_TIMEOUT,
+    PLATFORMS,
+)
 from .sophos_client import SophosFirewallClient
 
 
@@ -16,7 +24,10 @@ async def async_setup_entry(hass: Any, entry: Any) -> bool:
         username=entry.data[CONF_USERNAME],
         password=entry.data[CONF_PASSWORD],
         verify_ssl=entry.data.get(CONF_VERIFY_SSL, False),
-        timeout=entry.data.get(CONF_REQUEST_TIMEOUT, 30),
+        timeout=min(
+            entry.data.get(CONF_REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT),
+            MAX_REQUEST_TIMEOUT,
+        ),
     )
     coordinator = SophosFirewallCoordinator(
         hass,
