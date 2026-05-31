@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from datetime import timedelta
 import logging
 
@@ -47,9 +46,9 @@ class SophosFirewallCoordinator(DataUpdateCoordinator):
         return report_key, report, None
 
     async def _async_update_data(self):
-        results = await asyncio.gather(
-            *(self._fetch_report_safely(report_key) for report_key in REPORT_PAYLOADS),
-        )
+        results = []
+        for report_key in REPORT_PAYLOADS:
+            results.append(await self._fetch_report_safely(report_key))
 
         data: dict[str, ReportData] = {}
         errors: dict[str, str] = {}

@@ -113,8 +113,10 @@ class SophosFirewallClient:
             raise RuntimeError("Sophos API returned an empty response")
 
         status = _response_status(response.text)
-        if status and status.lower() not in {"success", "successful"}:
-            raise RuntimeError(f"Sophos API status: {status}")
+        if status:
+            normalized_status = status.lower()
+            if any(term in normalized_status for term in ("failure", "failed", "denied", "error")):
+                raise RuntimeError(f"Sophos API status: {status}")
 
         return response.text
 
