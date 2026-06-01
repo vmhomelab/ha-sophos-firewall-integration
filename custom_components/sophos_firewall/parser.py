@@ -1,21 +1,23 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 import xml.etree.ElementTree as ET
 
 
 @dataclass(frozen=True, slots=True)
-class ReportRow:
+class ResourceItem:
     name: str
-    hits: int = 0
-    bytes: int = 0
+    attributes: dict[str, str]
 
 
 @dataclass(frozen=True, slots=True)
-class ReportData:
-    rows: list[ReportRow]
-    total_hits: int
-    total_bytes: int
+class ResourceData:
+    items: list[ResourceItem]
+
+    @property
+    def count(self) -> int:
+        return len(self.items)
 
 
 def _strip_namespace(tag: str) -> str:
@@ -39,39 +41,54 @@ def _child_text_any(node: ET.Element, names: tuple[str, ...]) -> str | None:
     return None
 
 
-def _int(value: str | None) -> int:
-    if value is None:
-        return 0
-    cleaned = value.replace(",", "").strip()
-    try:
-        return int(float(cleaned))
-    except ValueError:
-        return 0
+def _direct_text_attributes(node: ET.Element) -> dict[str, str]:
+    attributes: dict[str, str] = {}
+    for child in list(node):
+        tag = _strip_namespace(child.tag)
+        value = _text(child)
+        if value is not None:
+            attributes[tag] = value
+    return attributes
 
 
-def parse_report_response(xml_text: str) -> ReportData:
-    """Parse common Sophos/SFOS XML report rows into normalized top-list data."""
+def parse_resource_response(xml_text: str, resource_tag: str) -> ResourceData:
+    """Parse an official SFOS XML API Get response for one resource type.
+
+    The Sophos Postman collection exposes configuration resources such as
+    FirewallRule, NATRule, Interface, IPHost, Services, etc. These are not
+    report rows; each matching XML element is one configured object.
+    """
     root = ET.fromstring(xml_text)
-    rows: list[ReportRow] = []
+    wanted = resource_tag.lower()
+    items: list[ResourceItem] = []
 
     for node in root.iter():
-        if _strip_namespace(node.tag).lower() not in {"row", "item", "record", "entry"}:
+        if _strip_namespace(node.tag).lower() != wanted:
             continue
-        name = _child_text_any(node, ("Name", "Key", "Value", "Category", "Country", "Host", "Domain", "Application"))
+
+        name = _child_text_any(node, ("Name", "RuleName", "HostName", "Description"))
         if not name:
-            continue
-        hits = _int(_child_text_any(node, ("Hits", "Count", "Requests", "Packets", "Allowed", "Blocked")))
-        byte_count = _int(_child_text_any(node, ("Bytes", "Traffic", "DataTransfer", "Size")))
-        rows.append(ReportRow(name=name, hits=hits, bytes=byte_count))
+            name = f"{resource_tag} #{len(items) + 1}"
 
-    return ReportData(
-        rows=rows,
-        total_hits=sum(row.hits for row in rows),
-        total_bytes=sum(row.bytes for row in rows),
-    )
+        items.append(ResourceItem(name=name, attributes=_direct_text_attributes(node)))
+
+    return ResourceData(items=items)
 
 
-def pick_top_item(rows: list[ReportRow]) -> ReportRow | None:
-    if not rows:
+def pick_first_item(items: list[ResourceItem]) -> ResourceItem | None:
+    if not items:
         return None
-    return max(rows, key=lambda row: (row.hits, row.bytes, row.name))
+    return sorted(items, key=lambda item: item.name.casefold())[0]
+
+
+def resource_attributes(data: ResourceData, limit: int = 10) -> dict[str, Any]:
+    return {
+        "count": data.count,
+        "items": [
+            {
+                "name": item.name,
+                "attributes": item.attributes,
+            }
+            for item in data.items[:limit]
+        ],
+    }

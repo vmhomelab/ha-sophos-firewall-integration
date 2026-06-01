@@ -9,22 +9,38 @@ import xml.etree.ElementTree as ET
 
 import httpx
 
-from .parser import ReportData, parse_report_response
+from .parser import ResourceData, parse_resource_response
 
 API_PATH: Final = "/webconsole/APIController"
 DEFAULT_API_PORT: Final = 4444
 _LOGGER = logging.getLogger(__name__)
 
-REPORT_PAYLOADS: Final[dict[str, str]] = {
-    "blocked_traffic": """<Get><Report><Name>BlockedTraffic</Name></Report></Get>""",
-    "allowed_traffic": """<Get><Report><Name>AllowedTraffic</Name></Report></Get>""",
-    "allowed_application_categories": """<Get><Report><Name>AllowedApplicationCategories</Name></Report></Get>""",
-    "allowed_web_categories": """<Get><Report><Name>AllowedWebCategories</Name></Report></Get>""",
-    "source_countries": """<Get><Report><Name>SourceCountries</Name></Report></Get>""",
-    "destination_countries": """<Get><Report><Name>DestinationCountries</Name></Report></Get>""",
-    "web_domains": """<Get><Report><Name>WebDomains</Name></Report></Get>""",
-    "top_hosts": """<Get><Report><Name>TopHosts</Name></Report></Get>""",
-}
+
+@dataclass(frozen=True, slots=True)
+class SophosResourceDefinition:
+    key: str
+    tag: str
+    payload: str
+
+
+# These objects come from Sophos' official Postman collection:
+# https://docs.sophos.com/nsg/sophos-firewall/api-collections/sophosfirewall.postman_collection.json
+# They are configuration resources, not live report/dashboard queries.
+RESOURCE_DEFINITIONS: Final[tuple[SophosResourceDefinition, ...]] = (
+    SophosResourceDefinition("firewall_rules", "FirewallRule", "<Get><FirewallRule></FirewallRule></Get>"),
+    SophosResourceDefinition("firewall_rule_groups", "FirewallRuleGroup", "<Get><FirewallRuleGroup></FirewallRuleGroup></Get>"),
+    SophosResourceDefinition("nat_rules", "NATRule", "<Get><NATRule></NATRule></Get>"),
+    SophosResourceDefinition("ssl_tls_inspection_rules", "SSLTLSInspectionRule", "<Get><SSLTLSInspectionRule></SSLTLSInspectionRule></Get>"),
+    SophosResourceDefinition("web_filter_exceptions", "WebFilterException", "<Get><WebFilterException></WebFilterException></Get>"),
+    SophosResourceDefinition("interfaces", "Interface", "<Get><Interface></Interface></Get>"),
+    SophosResourceDefinition("ip_hosts", "IPHost", "<Get><IPHost></IPHost></Get>"),
+    SophosResourceDefinition("fqdn_hosts", "FQDNHost", "<Get><FQDNHost></FQDNHost></Get>"),
+    SophosResourceDefinition("mac_hosts", "MACHost", "<Get><MACHost></MACHost></Get>"),
+    SophosResourceDefinition("services", "Services", "<Get><Services></Services></Get>"),
+    SophosResourceDefinition("local_service_acl_rules", "LocalServiceACL", "<Get><LocalServiceACL></LocalServiceACL></Get>"),
+    SophosResourceDefinition("schedules", "Schedule", "<Get><Schedule></Schedule></Get>"),
+)
+RESOURCE_DEFINITIONS_BY_KEY: Final = {definition.key: definition for definition in RESOURCE_DEFINITIONS}
 
 
 def _normalize_host(host: str) -> str:
@@ -91,7 +107,7 @@ class SophosFirewallClient:
 
     @property
     def http_timeout(self) -> httpx.Timeout:
-        # Keep total time below Home Assistant's 10 second slow-update warning.
+        # Keep per-resource request time below Home Assistant's 10 second slow-update warning.
         return httpx.Timeout(timeout=float(self.timeout), connect=min(5.0, float(self.timeout)))
 
     def _wrap(self, payload: str) -> str:
@@ -120,6 +136,6 @@ class SophosFirewallClient:
 
         return response.text
 
-    async def fetch_report(self, report_key: str) -> ReportData:
-        payload = REPORT_PAYLOADS[report_key]
-        return parse_report_response(await self.post_xml(payload))
+    async def fetch_resource(self, resource_key: str) -> ResourceData:
+        definition = RESOURCE_DEFINITIONS_BY_KEY[resource_key]
+        return parse_resource_response(await self.post_xml(definition.payload), definition.tag)

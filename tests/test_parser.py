@@ -1,32 +1,61 @@
-from custom_components.sophos_firewall.parser import parse_report_response, pick_top_item
+from custom_components.sophos_firewall.parser import parse_resource_response, pick_first_item, resource_attributes
 
 
-def test_parse_report_response_handles_report_rows_and_totals():
+def test_parse_resource_response_counts_official_sfos_objects():
     xml = """
     <Response>
-      <Report>
-        <Row>
-          <Name>Germany</Name>
-          <Hits>12</Hits>
-          <Bytes>2048</Bytes>
-        </Row>
-        <Row>
-          <Name>United States</Name>
-          <Hits>7</Hits>
-          <Bytes>1024</Bytes>
-        </Row>
-      </Report>
+      <Login><status>Authentication Successful</status></Login>
+      <FirewallRule transactionid="1">
+        <Name>LAN to WAN</Name>
+        <Status>Enable</Status>
+        <IPFamily>IPv4</IPFamily>
+      </FirewallRule>
+      <FirewallRule transactionid="2">
+        <Name>Block Guest</Name>
+        <Status>Disable</Status>
+        <IPFamily>IPv4</IPFamily>
+      </FirewallRule>
     </Response>
     """
 
-    report = parse_report_response(xml)
+    resource = parse_resource_response(xml, "FirewallRule")
 
-    assert report.total_hits == 19
-    assert report.total_bytes == 3072
-    assert report.rows[0].name == "Germany"
-    assert report.rows[0].hits == 12
-    assert report.rows[0].bytes == 2048
+    assert resource.count == 2
+    assert resource.items[0].name == "LAN to WAN"
+    assert resource.items[0].attributes["Status"] == "Enable"
+    assert resource.items[1].attributes["IPFamily"] == "IPv4"
 
 
-def test_pick_top_item_returns_none_for_empty_rows():
-    assert pick_top_item([]) is None
+def test_parse_resource_response_uses_fallback_name_for_unnamed_objects():
+    xml = """
+    <Response>
+      <LocalServiceACL>
+        <SourceZone>LAN</SourceZone>
+        <Service>HTTPS</Service>
+      </LocalServiceACL>
+    </Response>
+    """
+
+    resource = parse_resource_response(xml, "LocalServiceACL")
+
+    assert resource.count == 1
+    assert resource.items[0].name == "LocalServiceACL #1"
+
+
+def test_pick_first_item_returns_none_for_empty_items():
+    assert pick_first_item([]) is None
+
+
+def test_resource_attributes_limits_items_and_includes_count():
+    xml = """
+    <Response>
+      <Interface><Name>Port1</Name></Interface>
+      <Interface><Name>Port2</Name></Interface>
+    </Response>
+    """
+
+    resource = parse_resource_response(xml, "Interface")
+    attrs = resource_attributes(resource, limit=1)
+
+    assert attrs["count"] == 2
+    assert attrs["items"] == [{"name": "Port1", "attributes": {"Name": "Port1"}}]

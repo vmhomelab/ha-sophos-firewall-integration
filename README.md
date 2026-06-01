@@ -4,33 +4,46 @@ Custom Home Assistant integration for Sophos Firewall / SFOS monitoring sensors.
 
 ## Current development state
 
-This repository is intentionally created with a `dev` branch for active work. The initial implementation provides the Home Assistant integration scaffold, XML API client, parser, coordinator, and sensor entities.
+This repository is intentionally created with a `dev` branch for active work. The implementation provides the Home Assistant integration scaffold, XML API client, parser, coordinator, and sensor entities.
 
-The exact SFOS report payloads may need adjustment against a real firewall XML API response. The client already uses the correct SFOS API request shape: XML inside the `reqxml` form field.
+The integration uses Sophos' official XML API request format: XML inside the `reqxml` form field posted to `/webconsole/APIController` on the firewall web admin listener, usually HTTPS port `4444`.
 
-Report fetches are bounded to stay below Home Assistant's slow-update warning threshold. Failed report requests are logged per report and exposed as `last_error` on the affected sensor instead of blocking the entire coordinator update.
+## Important API scope note
 
-## Planned sensors
+Sophos' official Postman collection documents configuration XML API objects such as firewall rules, NAT rules, interfaces, hosts, services, ACLs, and schedules. It does **not** document the earlier guessed live dashboard/report objects such as `BlockedTraffic` or `TopHosts`.
 
-- Blocked traffic
-- Allowed traffic
-- Top allowed application category
-- Top allowed web category
-- Top source country
-- Top destination country
-- Top web domain
-- Top host
+For that reason, this integration now exposes stable configuration inventory sensors first instead of polling unsupported report payloads that can time out on real SFOS devices.
 
-Each top-list sensor exposes the top item as the state and the top 10 rows as attributes:
+## Sensors
+
+The current sensors expose object counts as their state and the first 10 returned objects as attributes:
+
+- Sophos Firewall Rules
+- Sophos Firewall Rule Groups
+- Sophos NAT Rules
+- Sophos SSL TLS Inspection Rules
+- Sophos Web Filter Exceptions
+- Sophos Interfaces
+- Sophos IP Hosts
+- Sophos FQDN Hosts
+- Sophos MAC Hosts
+- Sophos Services
+- Sophos Local Service ACL Rules
+- Sophos Schedules
+
+Example attributes:
 
 ```yaml
-total_hits: 123
-total_bytes: 456789
-top:
-  - name: Germany
-    hits: 42
-    bytes: 12345
+count: 2
+items:
+  - name: LAN to WAN
+    attributes:
+      Name: LAN to WAN
+      Status: Enable
+      IPFamily: IPv4
 ```
+
+Failed resource requests are logged per resource and exposed as `last_error` on the affected sensor instead of blocking the entire coordinator update.
 
 ## Installation
 

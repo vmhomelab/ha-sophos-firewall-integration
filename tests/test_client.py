@@ -1,6 +1,6 @@
 import pytest
 
-from custom_components.sophos_firewall.sophos_client import SophosFirewallClient, _response_status
+from custom_components.sophos_firewall.sophos_client import RESOURCE_DEFINITIONS_BY_KEY, SophosFirewallClient, _response_status
 
 
 def test_client_trims_host_and_uses_api_controller_path():
@@ -38,3 +38,13 @@ def test_client_default_timeout_stays_below_home_assistant_slow_update_warning()
 )
 def test_response_status_extracts_sfos_status_text(xml, status):
     assert _response_status(xml) == status
+
+
+def test_official_postman_collection_resources_are_configuration_get_payloads():
+    firewall_rules = RESOURCE_DEFINITIONS_BY_KEY["firewall_rules"]
+    nat_rules = RESOURCE_DEFINITIONS_BY_KEY["nat_rules"]
+    interfaces = RESOURCE_DEFINITIONS_BY_KEY["interfaces"]
+
+    assert firewall_rules.payload == "<Get><FirewallRule></FirewallRule></Get>"
+    assert nat_rules.payload == "<Get><NATRule></NATRule></Get>"
+    assert interfaces.payload == "<Get><Interface></Interface></Get>"
